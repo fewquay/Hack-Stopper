@@ -1,0 +1,57 @@
+#this class removes multiple samples of the same variant id but on different lines (via line item properties to split them into seperate line items)
+class HackStopper
+
+  def initialize()
+    
+  end
+  
+  def isFree(item)
+    item.line_price == Money.zero
+  end
+  
+  def run(cart)
+    freeVariants = {}
+    
+    #first get rid of multiples on individual lines
+    cart.line_items.each do |item|
+      if isFree(item) && item.quantity > 1
+       item.split({ take: item.quantity-1 })
+      end
+    end    
+    
+    #second get hash of free item quantities
+    cart.line_items.each do |item|
+      next if !isFree(item)
+      
+      thisVariantId = item.variant.id
+      
+      if freeVariants.key?(thisVariantId)
+        freeVariants[thisVariantId] += item.quantity
+      else
+        freeVariants[thisVariantId] = item.quantity
+      end
+    end
+    
+    #third remove the multiples of the same variantid for free lines
+    freeVariants.each do |key,value|
+      cart.line_items.each do |item|
+
+        if isFree(item) && item.variant.id.to_s == key.to_s
+          value -= item.quantity
+          this_properties = item.properties
+          this_properties.merge!({"delete" => "delete"})
+          item.change_properties(this_properties, message: "")
+          if value <= 1
+            break
+          end
+        end
+      end
+    end
+    
+    cart.line_items.delete_if {|item| item.properties.key?("delete") }
+  end
+end
+
+HackStopper.new().run(Input.cart)
+
+Output.cart = Input.cart
